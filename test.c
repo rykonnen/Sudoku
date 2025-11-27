@@ -1,39 +1,141 @@
-#include "gui.h"
+#define CLAY_IMPLEMENTATION
+#include "raylib.h"
+#include "clay.h"
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <time.h>
 
-GameState gameState = GAME_MENU;
-int activeCellIndex = -1;
-int hoveredDifficulty = -1;
+// --- Sudoku Definitions ---
+typedef unsigned char u8;
+#define CELLS 81
+#define idx(r, c) ((r) * 9 + (c))
 
+// --- Colors (Updated) ---
 Clay_Color STATIC_CELL_COLOR   = {236, 255, 255, 255};
 Clay_Color EDITABLE_CELL_COLOR = {255, 255, 255, 255};
-Clay_Color HOVER_COLOR         = {182, 214, 255, 255};
-Clay_Color ACTIVE_COLOR        = {109, 202, 209, 255};
-Color GIVEN_NUM_COLOR          = {0, 0, 0, 255};
-Color USER_NUM_COLOR           = {44, 53, 54, 255};
+Clay_Color HOVER_COLOR      = {182, 214, 255, 255};
+Clay_Color ACTIVE_COLOR     = {109, 202, 209, 255};
+Color GIVEN_NUM_COLOR       = {0, 0, 0, 255};
+Color USER_NUM_COLOR        = {44, 53, 54, 255};
 
-NumberButton numberButtons[NUM_COUNT];
+// difficulties
+#define EASY_HOLES   25
+#define MEDIUM_HOLES 40
+#define HARD_HOLES   59
+int difficultyHoles = MEDIUM_HOLES; // default
 
+// game state
+typedef enum { GAME_MENU, GAME_PLAY } GameState;
+GameState gameState = GAME_MENU;
+
+// menu hover
+int hoveredDifficulty = -1; // 0=Easy,1=Med,2=Hard
+
+// game state vars
+int activeCellIndex = -1;
+u8 grid[CELLS] = {0};         // The current playable grid state
+u8 initial_grid[CELLS] = {0}; // The original puzzle grid (read-only)
+u8 solution_grid[CELLS] = {0};
 bool flashError = false;
 int flashFrames = 0;
 const int FLASH_DURATION = 15;
+int mistakes = 0;
+const int maxMistakes = 3;
+bool showSolution = false;
+bool gameComplete = false;  // global variable to track game completion
 
+// --- Sudoku functions ---
+bool is_valid(const u8 grid[CELLS], int row, int col, u8 val) {
+    for (int i = 0; i < 9; i++) {
+        if (grid[idx(row, i)] == val) return false;
+        if (grid[idx(i, col)] == val) return false;
+    }
+    int br = (row / 3) * 3;
+    int bc = (col / 3) * 3;
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            if (grid[idx(br + r, bc + c)] == val) return false;
+    return true;
+}
 
+bool find_empty(const u8 grid[CELLS], int *row, int *col) {
+    for (int r = 0; r < 9; r++)
+        for (int c = 0; c < 9; c++)
+            if (grid[idx(r, c)] == 0) {
+                *row = r;
+                *col = c;
+                return true;
+            }
+    return false;
+}
 
-//start clay layouts
+void shuffle_u8(u8 *arr, int n) {
+    for (int i = n - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        u8 tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
+}
+
+bool generator_recursive(u8 grid[CELLS]) {
+    int row, col;
+    if (!find_empty(grid, &row, &col)) return true;
+    u8 order[9];
+    for (int i = 0; i < 9; i++) order[i] = i + 1;
+    shuffle_u8(order, 9);
+    for (int k = 0; k < 9; k++) {
+        u8 v = order[k];
+        if (is_valid(grid, row, col, v)) {
+            grid[idx(row, col)] = v;
+            if (generator_recursive(grid)) return true;
+            grid[idx(row, col)] = 0;
+        }
+    }
+    return false;
+}
+
+void make_puzzle(u8 current_grid[CELLS], u8 fixed_grid[CELLS], int holes) {
+    memset(current_grid, 0, CELLS);
+    memset(fixed_grid, 0, CELLS);
+
+    u8 fullGrid[CELLS] = {0};
+    generator_recursive(fullGrid);              // generate full solution
+    memcpy(solution_grid, fullGrid, CELLS);    // store solution
+
+    memcpy(current_grid, fullGrid, CELLS);     // start puzzle grid as full solution
+    memcpy(fixed_grid, fullGrid, CELLS);       // fixed grid for static cells
+
+    int removed = 0;
+    while (removed < holes) {
+        int pos = rand() % CELLS;
+        if (current_grid[pos] != 0) {
+            current_grid[pos] = 0;
+            fixed_grid[pos] = 0;
+            removed++;
+        }
+    }
+}
+
+bool is_complete() {
+    for (int i = 0; i < CELLS; i++)
+        if (grid[i] == 0) return false;
+    return true;
+}
+
+// --- Clay Layouts ---
 Clay_RenderCommandArray CreateGridLayout(void) {
     Clay_BeginLayout();
-    int cellSize = 30;
-    int gap = 0;
+    int cellSize = 30; 
+    int gap = 1;
     int padding = 10;
 
     CLAY(CLAY_ID("GridWrapper"), {
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
+            .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER},
             .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}
         }
     }) {
@@ -66,8 +168,6 @@ Clay_RenderCommandArray CreateGridLayout(void) {
     }
     return Clay_EndLayout();
 }
-
-
 
 Clay_RenderCommandArray CreateMenuLayout(void) {
     Clay_BeginLayout();
@@ -104,11 +204,19 @@ Clay_RenderCommandArray CreateMenuLayout(void) {
     return Clay_EndLayout();
 }
 
+// Main Program 
+int main(void) {
+    InitWindow(600, 600, "Sudoku Clay");
+    SetTargetFPS(60);
+    srand(time(NULL));
 
+    // Clay Memory & Initialization
+    uint64_t memorySize = Clay_MinMemorySize();
+    void *memory = malloc(memorySize);
+    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(memorySize, memory);
+    Clay_Initialize(arena, (Clay_Dimensions){600, 600}, (Clay_ErrorHandler){NULL});
 
-
-void render_game_loop(Clay_Arena arena, int fontSize) {
-
+    int fontSize = 20;
 
     while (!WindowShouldClose()) {
         Vector2 mouse = GetMousePosition();
@@ -363,5 +471,9 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
 
         EndDrawing();
     }
+
+    free(memory);
+    CloseWindow();
+    return 0;
 }
 

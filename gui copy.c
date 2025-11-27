@@ -33,7 +33,7 @@ Clay_RenderCommandArray CreateGridLayout(void) {
     CLAY(CLAY_ID("GridWrapper"), {
         .layout = {
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER},
+            .childAlignment = {.x = CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER},
             .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}
         }
     }) {
@@ -104,14 +104,157 @@ Clay_RenderCommandArray CreateMenuLayout(void) {
     return Clay_EndLayout();
 }
 
+// Back button at top-left
+Clay_RenderCommandArray CreateBackButton(void) {
+    Clay_BeginLayout();
+
+    CLAY(CLAY_ID("BackWrapper"), {
+        .layout = {
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP},
+            .padding = CLAY_PADDING_ALL(5),
+            .sizing = {.width =  CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}
+        }
+    }) {
+        CLAY(CLAY_ID("Back"), {
+            .layout = {.sizing = {.width = CLAY_SIZING_FIXED(150), .height = CLAY_SIZING_FIXED(30)}},
+            .backgroundColor = (Clay_Color){255, 255, 255, 255},
+            .cornerRadius = CLAY_CORNER_RADIUS(8)
+        }) {}
+    }
+
+    return Clay_EndLayout();
+}
+
+// Solution + Reset buttons below the grid
+Clay_RenderCommandArray CreateControlButtons(void) {
+    Clay_BeginLayout();
+
+    CLAY(CLAY_ID("ControlWrapper"), {
+        .layout = {
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_BOTTOM},
+            .childGap = 10,
+            .padding = CLAY_PADDING_ALL(0),
+            .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}
+        }
+    }) {
+        CLAY(CLAY_ID("Solution"), {
+            .layout = {.sizing = {.width = CLAY_SIZING_FIXED(230), .height = CLAY_SIZING_FIXED(30)}},
+            .backgroundColor = (Clay_Color){255, 255, 255, 255},
+            .cornerRadius = CLAY_CORNER_RADIUS(8)
+        }) {}
+        CLAY(CLAY_ID("Reset"), {
+            .layout = {.sizing = {.width = CLAY_SIZING_FIXED(150), .height = CLAY_SIZING_FIXED(30)}},
+            .backgroundColor = (Clay_Color){255, 255, 255, 255},
+            .cornerRadius = CLAY_CORNER_RADIUS(8)
+        }) {}
+    }
+
+    return Clay_EndLayout();
+}
+
+
+
+Clay_RenderCommandArray CreateNumberPadLayout(int screenWidth, int screenHeight) {
+    Clay_BeginLayout();
+
+    int buttonSize = 40; // Size of each numpad button
+    int gap = 3;
+
+    CLAY(CLAY_ID("NumberPadWrapper"), {
+        .layout = {
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .childGap = gap,
+            .childAlignment = {.x = CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER},
+            .sizing = {.width = CLAY_SIZING_FIXED(buttonSize*3 + gap*2), .height = CLAY_SIZING_GROW(0)}
+        }
+    }) {
+        int n = 1;
+        for (int r = 0; r < 3; r++) {
+            CLAY_AUTO_ID({
+                .layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = gap}
+            }) {
+                for (int c = 0; c < 3; c++) {
+                    numberButtons[n-1].value = n;
+
+                    CLAY_AUTO_ID({
+                        .layout = {
+                            .sizing = {.width = CLAY_SIZING_FIXED(buttonSize),
+                                       .height = CLAY_SIZING_FIXED(buttonSize)}
+                        },
+                        .backgroundColor = (Clay_Color){200, 200, 255, 255},
+                        .cornerRadius = CLAY_CORNER_RADIUS(5)
+                    }) {}
+                    n++;
+                }
+            }
+        }
+    }
+
+    return Clay_EndLayout();
+}
+
+
+
+void number_pad(Clay_RenderCommandArray commands, Vector2 mouse, int *activeCellIndex,
+                unsigned char grid[CELLS], unsigned char initial_grid[CELLS]) {
+    int n = 0;
+
+    for (int i = 0; i < commands.length; i++) {
+        Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(&commands, i);
+
+        if (cmd->commandType != CLAY_RENDER_COMMAND_TYPE_RECTANGLE) continue;
+
+        // Copy Clay_BoundingBox into a Raylib Rectangle
+        Rectangle btnRect = {
+            cmd->boundingBox.x,
+            cmd->boundingBox.y,
+            cmd->boundingBox.width,
+            cmd->boundingBox.height
+        };
+
+        numberButtons[n].rect = btnRect;
+
+        bool hovered = CheckCollisionPointRec(mouse, btnRect);
+        Color fill = hovered ? (Color){150, 200, 255, 255} : (Color){200, 200, 255, 255};
+
+        DrawRectangleRec(btnRect, fill);
+        DrawRectangleLinesEx(btnRect, 1, BLACK);
+
+        int ts = MeasureText(TextFormat("%d", numberButtons[n].value), 20);
+        DrawText(TextFormat("%d", numberButtons[n].value),
+                 btnRect.x + (btnRect.width - ts)/2,
+                 btnRect.y + (btnRect.height - 20)/2,
+                 20, BLACK);
+
+        if (hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (*activeCellIndex != -1 && initial_grid[*activeCellIndex] == 0) {
+                grid[*activeCellIndex] = numberButtons[n].value;
+            }
+        }
+
+        n++;
+        if (n >= NUM_COUNT) break;
+    }
+}
+
+
 
 
 
 void render_game_loop(Clay_Arena arena, int fontSize) {
+    float gridX = (GetScreenWidth() - 30*9)/2;
+    float gridY = (GetScreenWidth() - 30*9)/2;
 
+    Clay_RenderCommandArray numPadCommands = CreateNumberPadLayout(GetScreenWidth(), GetScreenHeight());
+    Clay_RenderCommandArray controlButtons = CreateControlButtons();
+    Clay_RenderCommandArray backButton = CreateBackButton();
 
     while (!WindowShouldClose()) {
         Vector2 mouse = GetMousePosition();
+        Vector2 mistakesPos = {gridX + 260, gridY+10};
+        Vector2 finishedGame = {gridX + 120, gridY + 30};
 
         // --- MENU ---
         if (gameState == GAME_MENU) {
@@ -171,7 +314,8 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
             // Buttons & text
             const char *labels[3] = {"EASY", "MEDIUM", "HARD"};
             for (int b = 0; b < btnCount; b++) {
-                Color col = (hoveredDifficulty == b) ? (Color){HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, HOVER_COLOR.a} : (Color){255,255,255,255};
+                Color col = (hoveredDifficulty == b) ? (Color){HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, HOVER_COLOR.a} : 
+                (Color){255,255,255,255};
                 DrawRectangleRec(btnRects[b], col);
                 DrawRectangleLinesEx(btnRects[b], 2, BLACK);
 
@@ -194,11 +338,17 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
             activeCellIndex = -1;
             flashError = false;
             flashFrames = 0;
+            float gridOffsetX = 70; // same as drawing
+            float gridOffsetY = 0;  // should match the drawing offset
 
             for (int i = 0; i < gridCommands.length; i++) {
                 Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(&gridCommands, i);
-                Rectangle cellRect = {cmd->boundingBox.x, cmd->boundingBox.y, cmd->boundingBox.width, cmd->boundingBox.height};
-
+                Rectangle cellRect = {
+                    cmd->boundingBox.x + gridOffsetX,
+                    cmd->boundingBox.y + gridOffsetY,
+                    cmd->boundingBox.width,
+                    cmd->boundingBox.height
+                };
                 if ((int)cellRect.width == 30 && (int)cellRect.height == 30 &&
                     CheckCollisionPointRec(mouse, cellRect)) {
                     activeCellIndex = i;
@@ -231,33 +381,6 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
         if (flashFrames > 0) flashFrames--;
         else flashError = false;
 
-        // Buttons below grid 
-        float gridWidth = 30*9;
-        float gridX = (GetScreenWidth() - gridWidth)+10;
-        float gridY = 30*5;
-
-        // Back & Solution buttons positioned below grid
-        Rectangle backBtn = {60, gridY + 20, 80, 30};
-        Rectangle resetBtn = {60, gridY + 30*8, 80, 30};
-        Rectangle showBtn = {gridX + 120, gridY + 30*8, 100, 30};
-        Vector2 mistakesPos = {gridX + 120, gridY + 20};
-        Vector2 finishedGame = {gridX + 120, gridY + 30*4};
-
-        if (CheckCollisionPointRec(mouse, backBtn) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            gameState = GAME_MENU;
-        }
-        if (CheckCollisionPointRec(mouse, showBtn) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            showSolution = true;
-        }
-        if (CheckCollisionPointRec(mouse, resetBtn) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            make_puzzle(grid, initial_grid, difficultyHoles);
-            activeCellIndex = -1;
-            flashError = false;
-            flashFrames = 0;
-            mistakes = 0;
-            showSolution = false;
-        }
-
         // --- DRAW GAME ---
         BeginDrawing();
         ClearBackground(WHITE); // background color set to white
@@ -284,7 +407,9 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
                 fillColor = (Color){HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, HOVER_COLOR.a}; 
             } 
             else { 
-                fillColor = (initial_grid[i] != 0) ? (Color){STATIC_CELL_COLOR.r, STATIC_CELL_COLOR.g, STATIC_CELL_COLOR.b, STATIC_CELL_COLOR.a} : (Color){EDITABLE_CELL_COLOR.r, EDITABLE_CELL_COLOR.g, EDITABLE_CELL_COLOR.b, EDITABLE_CELL_COLOR.a}; 
+                fillColor = (initial_grid[i] != 0) ? (Color){STATIC_CELL_COLOR.r, STATIC_CELL_COLOR.g, STATIC_CELL_COLOR.b, 
+                    STATIC_CELL_COLOR.a} : (Color){EDITABLE_CELL_COLOR.r, EDITABLE_CELL_COLOR.g, EDITABLE_CELL_COLOR.b, 
+                    EDITABLE_CELL_COLOR.a}; 
             }
 
             DrawRectangleRec(cellRect, fillColor);
@@ -302,35 +427,49 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
             }
         }
 
-        Color backColor = CheckCollisionPointRec(mouse, backBtn) ? (Color){HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, HOVER_COLOR.a} : (Color){255,255,255,255};
-        Color showColor = CheckCollisionPointRec(mouse, showBtn) ? (Color){HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, HOVER_COLOR.a} : (Color){255,255,255,255};
-        Color resetColor = CheckCollisionPointRec(mouse, resetBtn) ? (Color){HOVER_COLOR.r, HOVER_COLOR.g, HOVER_COLOR.b, HOVER_COLOR.a} : (Color){255,255,255,255};
+        // --- Draw back button ---
+        if (backButton.length > 0) {
+            Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(&backButton, 0);
+            Rectangle rect = {cmd->boundingBox.x, cmd->boundingBox.y, cmd->boundingBox.width+100, cmd->boundingBox.height};
+            Color col = CheckCollisionPointRec(mouse, rect) ? (Color){180,220,255,255} : WHITE;
+            DrawRectangleRec(rect, col);
+            DrawRectangleLinesEx(rect, 1, BLACK);
+            int ts = MeasureText("BACK", 12);
+            DrawText("BACK", rect.x + (rect.width - ts)/2, rect.y + (rect.height - 12)/2, 12, BLACK);
 
+            if (CheckCollisionPointRec(mouse, rect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                gameState = GAME_MENU;
+            }
+        }
 
-        // Back button
-        DrawRectangleRec(backBtn, backColor);
-        DrawRectangleLinesEx(backBtn, 1, BLACK);
-        int backTextSize = MeasureText("BACK", 16);
-        DrawText("BACK", 
-            backBtn.x + (backBtn.width - backTextSize)/2, backBtn.y + (backBtn.height - backTextSize)/2+14.0f,
-            16, BLACK);
+        // --- Draw control buttons (Solution + Reset) ---
+        for (int i = 0; i < controlButtons.length; i++) {
+            Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(&controlButtons, i);
+            Rectangle rect = {cmd->boundingBox.x + (i*80) + 320, cmd->boundingBox.y, cmd->boundingBox.width, cmd->boundingBox.height};
+            Color col = CheckCollisionPointRec(mouse, rect) ? (Color){180,220,255,255} : WHITE;
+            DrawRectangleRec(rect, col);
+            DrawRectangleLinesEx(rect, 1, BLACK);
 
-        // Show Solution button
-        DrawRectangleRec(showBtn, showColor);
-        DrawRectangleLinesEx(showBtn, 1, BLACK);
-        int showTextSize = MeasureText("SOLUTION", 16);
-        DrawText("SOLUTION", 
-            showBtn.x + (showBtn.width - showTextSize)/2, showBtn.y + (showBtn.height - showTextSize)/2+32.0f,
-            16, BLACK);
+            const char *label = (i == 0) ? "SOLUTION" : "RESET";
+            int ts = MeasureText(label, 12);
+            DrawText(label, rect.x + (rect.width - ts)/2, rect.y + (rect.height - 12)/2, 12, BLACK);
 
+            if (CheckCollisionPointRec(mouse, rect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if (i == 0){
+                    showSolution = true;
+                }
+                else {
+                    make_puzzle(grid, initial_grid, difficultyHoles);
+                    activeCellIndex = -1;
+                    flashError = false;
+                    flashFrames = 0;
+                    mistakes = 0;
+                    showSolution = false;
+                }
+            }
+        }
         
-        // Reset button
-        DrawRectangleRec(resetBtn, resetColor);
-        DrawRectangleLinesEx(resetBtn, 1, BLACK);
-        int resetTextSize = MeasureText("RESET", 16);
-        DrawText("RESET", 
-            resetBtn.x + (resetBtn.width - resetTextSize)/2, resetBtn.y + (resetBtn.height - resetTextSize)/2+20.0f, 
-            16, BLACK);
+
 
         // Mistakes counter
         DrawText(
@@ -354,14 +493,18 @@ void render_game_loop(Clay_Arena arena, int fontSize) {
                 finishedGame.x,
                 finishedGame.y,
                 20,
-                DARKBLUE
+                GREEN
             );
 
             
         }
         
+        // Draw number pad
+        number_pad(numPadCommands, mouse, &activeCellIndex, grid, initial_grid);
+
 
         EndDrawing();
     }
 }
+
 
