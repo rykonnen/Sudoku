@@ -216,8 +216,6 @@ int main(void) {
     Clay_Initialize(arena, (Clay_Dimensions){600, 600}, (Clay_ErrorHandler){NULL});
 
     int fontSize = 20;
-    int charsCount = 95;
-    Font myFont = LoadFontEx("Roboto-Regular.ttf", fontSize, NULL, charsCount);
 
     while (!WindowShouldClose()) {
         Vector2 mouse = GetMousePosition();
@@ -284,11 +282,11 @@ int main(void) {
                 DrawRectangleRec(btnRects[b], col);
                 DrawRectangleLinesEx(btnRects[b], 2, BLACK);
 
-                Vector2 textSize = MeasureTextEx(myFont, labels[b], 24, 2);
-                DrawTextEx(myFont, labels[b],
-                    (Vector2){btnRects[b].x + (btnRects[b].width - textSize.x)/15.0f,
-                              btnRects[b].y + (btnRects[b].height - textSize.y)/2-8.0f},
-                    24, 2, BLACK);
+                int textSize = MeasureText(labels[b], 24);
+                DrawText(labels[b],
+                    btnRects[b].x + (btnRects[b].width - textSize)/15.0f,
+                    btnRects[b].y + (btnRects[b].height - textSize)/2-8.0f,
+                    24, BLACK);
             }
 
             EndDrawing();
@@ -403,11 +401,11 @@ int main(void) {
             if (grid[i] != 0 || showSolution) {
                 char label[3];
                 snprintf(label, sizeof(label), "%d", showSolution ? solution_grid[i] : grid[i]);
-                Vector2 ts = MeasureTextEx(myFont, label, fontSize, 0);
+                int ts = MeasureText(label, fontSize);
                 Color textColor = (initial_grid[i] != 0) ? GIVEN_NUM_COLOR : USER_NUM_COLOR;
-                DrawTextEx(myFont, label, 
-                    (Vector2){cellRect.x + (cellRect.width - ts.x)/2-5.0f, cellRect.y + (cellRect.height - ts.y)/2-8.0f},
-                    fontSize, 0, textColor);
+                DrawText(label, 
+                    cellRect.x + (cellRect.width - ts)/2-7.0f, cellRect.y + (cellRect.height - ts)/2-10.0f,
+                    fontSize, textColor);
             }
         }
 
@@ -419,39 +417,50 @@ int main(void) {
         // Back button
         DrawRectangleRec(backBtn, backColor);
         DrawRectangleLinesEx(backBtn, 1, BLACK);
-        Vector2 backTextSize = MeasureTextEx(myFont, "BACK", 16, 0);
-        DrawTextEx(myFont, "BACK", 
-            (Vector2){backBtn.x + (backBtn.width - backTextSize.x)/2-20.0f, backBtn.y + (backBtn.height - backTextSize.y)/2-8.0f},
-            16, 0, BLACK);
+        int backTextSize = MeasureText("BACK", 16);
+        DrawText("BACK", 
+            backBtn.x + (backBtn.width - backTextSize)/2-15.0f, backBtn.y + (backBtn.height - backTextSize)/2-15.0f,
+            16, BLACK);
 
         // Show Solution button
         DrawRectangleRec(showBtn, showColor);
         DrawRectangleLinesEx(showBtn, 1, BLACK);
-        Vector2 showTextSize = MeasureTextEx(myFont, "SOLUTION", 16, 0);
-        DrawTextEx(myFont, "SOLUTION", 
-            (Vector2){showBtn.x + (showBtn.width - showTextSize.x)/2-35.0f, showBtn.y + (showBtn.height - showTextSize.y)/2-8.0f},
-            16, 0, BLACK);
+        int showTextSize = MeasureText("SOLUTION", 16);
+        DrawText("SOLUTION", 
+            showBtn.x + (showBtn.width - showTextSize)/2-35.0f, showBtn.y + (showBtn.height - showTextSize)/2-8.0f,
+            16, BLACK);
 
         
         // Reset button
         DrawRectangleRec(resetBtn, resetColor);
         DrawRectangleLinesEx(resetBtn, 1, BLACK);
-        Vector2 resetTextSize = MeasureTextEx(myFont, "RESET", 16, 0);
-        DrawTextEx(myFont, "RESET", 
-            (Vector2){resetBtn.x + (resetBtn.width - resetTextSize.x)/2-25.0f, resetBtn.y + (resetBtn.height - resetTextSize.y)/2-8.0f}, 
-            16, 0, BLACK);
+        int resetTextSize = MeasureText("RESET", 16);
+        DrawText("RESET", 
+            resetBtn.x + (resetBtn.width - resetTextSize)/2-25.0f, resetBtn.y + (resetBtn.height - resetTextSize)/2-8.0f, 
+            16, BLACK);
 
         // Mistakes counter
-        DrawTextEx(myFont, TextFormat("Mistakes: %d/%d", mistakes, maxMistakes), mistakesPos, 16, 0, RED);
+        DrawText(
+            TextFormat("Mistakes: %d/%d", mistakes, maxMistakes),
+            mistakesPos.x,
+            mistakesPos.y,
+            16,
+            RED
+        );
 
         if (is_complete() && !showSolution) {
-            DrawTextEx(myFont, TextFormat("Sudoku Complete! 🎉"), finishedGame, GetScreenHeight()-30, 20, DARKBLUE);
+            DrawText(
+                "Sudoku Complete! 🎉",
+                finishedGame.x,
+                finishedGame.y,
+                20,
+                DARKBLUE
+            );
         }
 
         EndDrawing();
     }
 
-    UnloadFont(myFont);
     free(memory);
     CloseWindow();
     return 0;
