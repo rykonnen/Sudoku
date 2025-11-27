@@ -44,6 +44,7 @@ const int FLASH_DURATION = 15;
 int mistakes = 0;
 const int maxMistakes = 3;
 bool showSolution = false;
+bool gameComplete = false;  // global variable to track game completion
 
 // --- Sudoku functions ---
 bool is_valid(const u8 grid[CELLS], int row, int col, u8 val) {
@@ -282,10 +283,10 @@ int main(void) {
                 DrawRectangleRec(btnRects[b], col);
                 DrawRectangleLinesEx(btnRects[b], 2, BLACK);
 
-                int textSize = MeasureText(labels[b], 24);
+                int textSize = MeasureText("EASY", 24);
                 DrawText(labels[b],
-                    btnRects[b].x + (btnRects[b].width - textSize)/15.0f,
-                    btnRects[b].y + (btnRects[b].height - textSize)/2-8.0f,
+                    btnRects[b].x + (btnRects[b].width - textSize)/2-15.0f,
+                    btnRects[b].y + (btnRects[b].height - textSize)/2+22.0f,
                     24, BLACK);
             }
 
@@ -315,7 +316,7 @@ int main(void) {
         }
 
         // Input handling
-        if (!showSolution && activeCellIndex != -1 && initial_grid[activeCellIndex] == 0) {
+        if (!showSolution && activeCellIndex != -1 && initial_grid[activeCellIndex] == 0 && !gameComplete) {
             int key = GetKeyPressed();
             if (key >= KEY_ONE && key <= KEY_NINE) {
                 u8 val = (u8)(key - KEY_ZERO);
@@ -404,7 +405,7 @@ int main(void) {
                 int ts = MeasureText(label, fontSize);
                 Color textColor = (initial_grid[i] != 0) ? GIVEN_NUM_COLOR : USER_NUM_COLOR;
                 DrawText(label, 
-                    cellRect.x + (cellRect.width - ts)/2, cellRect.y + (cellRect.height - ts)/2,
+                    cellRect.x + (cellRect.width - ts)/2, cellRect.y + (cellRect.height - ts)/2-3.0f,
                     fontSize, textColor);
             }
         }
@@ -419,7 +420,7 @@ int main(void) {
         DrawRectangleLinesEx(backBtn, 1, BLACK);
         int backTextSize = MeasureText("BACK", 16);
         DrawText("BACK", 
-            backBtn.x + (backBtn.width - backTextSize)/2-15.0f, backBtn.y + (backBtn.height - backTextSize)/2-15.0f,
+            backBtn.x + (backBtn.width - backTextSize)/2, backBtn.y + (backBtn.height - backTextSize)/2+14.0f,
             16, BLACK);
 
         // Show Solution button
@@ -427,7 +428,7 @@ int main(void) {
         DrawRectangleLinesEx(showBtn, 1, BLACK);
         int showTextSize = MeasureText("SOLUTION", 16);
         DrawText("SOLUTION", 
-            showBtn.x + (showBtn.width - showTextSize)/2-35.0f, showBtn.y + (showBtn.height - showTextSize)/2-8.0f,
+            showBtn.x + (showBtn.width - showTextSize)/2, showBtn.y + (showBtn.height - showTextSize)/2+32.0f,
             16, BLACK);
 
         
@@ -436,7 +437,7 @@ int main(void) {
         DrawRectangleLinesEx(resetBtn, 1, BLACK);
         int resetTextSize = MeasureText("RESET", 16);
         DrawText("RESET", 
-            resetBtn.x + (resetBtn.width - resetTextSize)/2-25.0f, resetBtn.y + (resetBtn.height - resetTextSize)/2-8.0f, 
+            resetBtn.x + (resetBtn.width - resetTextSize)/2, resetBtn.y + (resetBtn.height - resetTextSize)/2+20.0f, 
             16, BLACK);
 
         // Mistakes counter
@@ -448,15 +449,25 @@ int main(void) {
             RED
         );
 
-        if (is_complete() && !showSolution) {
+        if (is_complete() && !gameComplete) {
+            gameComplete = true;
+            showSolution = true; 
+
+        }
+
+        if (gameComplete) {
+
             DrawText(
-                "Sudoku Complete! 🎉",
+                "Sudoku \n Complete! 🎉",
                 finishedGame.x,
                 finishedGame.y,
                 20,
                 DARKBLUE
             );
+
+            
         }
+        
 
         EndDrawing();
     }
